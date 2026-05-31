@@ -1,0 +1,88 @@
+---
+/**
+ * Subscribe-to-updates form on the status homepage.
+ *
+ * Only Fola Form account holders can subscribe — the backend
+ * validates the address against the user table and silently
+ * returns "no_account" for unknown addresses. The form messaging
+ * is deliberately generic ("Check your inbox") on both
+ * EMAIL_SENT and NO_ACCOUNT outcomes so the form isn't a user-
+ * enumeration oracle.
+ */
+---
+<aside class="subscribe" id="subscribe-card">
+  <h2 class="subscribe__title">Subscribe to updates</h2>
+  <p class="subscribe__sub">
+    Get an email when something goes sideways. Only Fola Form
+    account holders can subscribe — drop your account email and
+    we'll send you a confirmation link.
+  </p>
+  <form class="subscribe__form" id="subscribe-form" novalidate>
+    <input class="subscribe__input"
+           id="subscribe-email"
+           type="email"
+           name="email"
+           placeholder="you@firm.com"
+           autocomplete="email"
+           required>
+    <button class="subscribe__btn" id="subscribe-btn" type="submit">
+      Subscribe
+    </button>
+  </form>
+  <p class="subscribe__msg" id="subscribe-msg" aria-live="polite"></p>
+  <p class="subscribe__note">
+    We only email about open / update / resolve moments. No marketing,
+    no digests. Unsubscribe with one click.
+  </p>
+</aside>
+
+<script>
+  import { subscribeEmail } from '../lib/services-api';
+
+  const form = document.getElementById('subscribe-form') as HTMLFormElement | null;
+  const input = document.getElementById('subscribe-email') as HTMLInputElement | null;
+  const btn = document.getElementById('subscribe-btn') as HTMLButtonElement | null;
+  const msg = document.getElementById('subscribe-msg') as HTMLElement | null;
+
+  function setMsg(text: string, tone: 'success' | 'warn' | 'error' | '' = ''): void {
+    if (!msg) return;
+    msg.textContent = text;
+    if (tone) msg.setAttribute('data-tone', tone);
+    else msg.removeAttribute('data-tone');
+  }
+
+  if (form && input && btn) {
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const email = input.value.trim();
+      if (!email || !email.includes('@')) {
+        setMsg('Enter a valid email to continue.', 'warn');
+        return;
+      }
+      btn.disabled = true;
+      setMsg('Sending…');
+      const outcome = await subscribeEmail(email);
+      btn.disabled = false;
+      switch (outcome) {
+        case 'email_sent':
+        case 'no_account':
+          // SAME message for both — don't leak which addresses
+          // have Fola accounts.
+          setMsg('Check your inbox — we just sent you a confirm link.', 'success');
+          input.value = '';
+          break;
+        case 'already_subscribed':
+          setMsg("You're already subscribed. We'll let you know.", 'success');
+          input.value = '';
+          break;
+        case 'invalid':
+          setMsg('That email looks malformed. Double-check and try again.', 'warn');
+          break;
+        case 'network':
+        default:
+          setMsg('Network hiccup — try again in a moment.', 'error');
+          break;
+      }
+    });
+  }
+</script>

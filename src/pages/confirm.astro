@@ -1,0 +1,76 @@
+---
+/**
+ * /confirm — landing for the confirm link in the subscription
+ * email. Pulls ?token=… from the URL and POSTs to the backend.
+ * Render a thank-you / try-again message based on the outcome.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title="Confirm subscription · Fola Form Status"
+  description="Confirm your subscription to Fola Form status updates."
+  canonical="https://status.folaform.com/confirm"
+>
+  <div class="shell shell--narrow">
+    <section class="section">
+      <p class="section-eyebrow">Subscription</p>
+      <h1 class="section-title" id="confirm-title">
+        Confirming your subscription…
+      </h1>
+      <div id="confirm-body" class="placeholder">
+        <strong>One moment</strong>
+        We're confirming your subscription with the server.
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  import { confirmSubscription } from '../lib/services-api';
+
+  function $(id: string): HTMLElement | null {
+    return document.getElementById(id);
+  }
+
+  function set(title: string, body: string, strong: string): void {
+    const t = $('confirm-title');
+    const b = $('confirm-body');
+    if (t) t.textContent = title;
+    if (b) b.innerHTML = `<strong>${strong}</strong>${body}`;
+  }
+
+  (async () => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (!token) {
+      set('Missing token',
+        'Open the confirm link from your email — we couldn\'t find a token in this URL.',
+        'No token found');
+      return;
+    }
+    const outcome = await confirmSubscription(token);
+    switch (outcome) {
+      case 'confirmed':
+        set("You're subscribed",
+          'We\'ll email you when an incident opens, when there\'s an update, and when it\'s resolved. A welcome email is on its way.',
+          'Subscription confirmed');
+        break;
+      case 'already_active':
+        set("You're already subscribed",
+          'This subscription is already active — no further action needed.',
+          'Already confirmed');
+        break;
+      case 'invalid':
+        set('Link expired or invalid',
+          'This confirm link is no longer valid. Subscribe again from the homepage to get a fresh confirmation email.',
+          'Link expired');
+        break;
+      case 'network':
+      default:
+        set('Network hiccup',
+          'We couldn\'t reach the server. Try refreshing in a minute — your token is still valid.',
+          'Try again');
+        break;
+    }
+  })();
+</script>

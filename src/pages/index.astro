@@ -11,6 +11,8 @@
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import StatusHeader from '../components/StatusHeader.astro';
+import ServiceBreakdown from '../components/ServiceBreakdown.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
 ---
 <BaseLayout
   title="Fola Form Status"
@@ -28,6 +30,12 @@ import StatusHeader from '../components/StatusHeader.astro';
       </h2>
       <div id="active-list"></div>
     </section>
+
+    <!-- ───── Per-service uptime breakdown ───── -->
+    <ServiceBreakdown />
+
+    <!-- ───── Subscribe to updates ───── -->
+    <SubscribeForm />
 
     <!-- ───── 30-day history ───── -->
     <section class="section" id="history-section">
@@ -139,7 +147,14 @@ import StatusHeader from '../components/StatusHeader.astro';
     stamp.textContent = meta.lastSuccessAt
       ? `Last checked ${relativeTime(meta.lastSuccessAt)}`
       : 'Last checked: never';
-    off.hidden = !meta.isOffline;
+    // Only show the offline chip if it's been genuinely stale —
+    // a single failed retry between successful polls would otherwise
+    // flash "OFFLINE · RETRYING" right next to a fresh "15s ago"
+    // stamp, which is confusing. 90s = 3 missed 30s polls.
+    const staleMs = meta.lastSuccessAt
+      ? Date.now() - meta.lastSuccessAt.getTime()
+      : Infinity;
+    off.hidden = !(meta.isOffline && staleMs > 90_000);
   }
 
   function incidentCardHtml(inc: IncidentView): string {

@@ -1,0 +1,132 @@
+---
+/**
+ * Statuspage-style per-service breakdown.
+ *
+ * Build-time markup is the section scaffold + a skeleton; the
+ * client-side script in this file polls /api/public/v1/services
+ * and renders one group card per category, one row per service,
+ * with a 90-bar uptime strip per service.
+ */
+---
+<section class="section" id="services-section">
+  <p class="section-eyebrow">Service uptime</p>
+  <h2 class="section-title">All services &middot; last 90 days</h2>
+  <div id="services-list">
+    <div class="skeleton" style="height:140px"></div>
+    <div class="skeleton" style="height:140px;width:92%"></div>
+    <div class="skeleton" style="height:140px;width:80%"></div>
+  </div>
+  <p id="services-empty"
+     class="placeholder"
+     hidden>
+    <strong>No services configured</strong>
+    The backend hasn't registered any service-health checks yet.
+  </p>
+</section>
+
+<script>
+  import {
+    startServicesPolling,
+    type ServicesEnvelope,
+    type ServiceRow,
+    type ServiceDayPoint,
+  } from '../lib/services-api';
+
+  function $(id: string): HTMLElement | null {
+    return document.getElementById(id);
+  }
+
+  function esc(s: string): string {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;',
+      '"': '&quot;', "'": '&#39;',
+    }[c] as string));
+  }
+
+  function barsHtml(days: ServiceDayPoint[]): string {
+    // The API returns newest-first; flip so today is on the right.
+    const ordered = [...days].reverse();
+    return ordered.map((d) => {
+      const state = d.status ?? 'UNKNOWN';
+      const title = d.uptimePct != null
+        ? `${d.day} · ${d.uptimePct}% uptime`
+        : `${d.day} · no data`;
+      return `<span class="svc-bar"
+                    data-state="${esc(state)}"
+                    title="${esc(title)}"
+                    aria-label="${esc(title)}"></span>`;
+    }).join('');
+  }
+
+  function uptimeStripHtml(days: ServiceDayPoint[]): string {
+    let total = 0, weight = 0;
+    for (const d of days) {
+      if (d.uptimePct == null) continue;
+      total += d.uptimePct;
+      weight += 1;
+    }
+    const avg = weight === 0 ? null : total / weight;
+    const label = avg == null ? '—' : `${avg.toFixed(2)}%`;
+    const start = days[days.length - 1]?.day ?? '';
+    const end = days[0]?.day ?? '';
+    return `
+      <div class="svc-row__uptime">
+        <span class="svc-row__uptime-label">${esc(start)} → ${esc(end)}</span>
+        <span><strong>${esc(label)}</strong> uptime</span>
+      </div>
+    `;
+  }
+
+  function rowHtml(svc: ServiceRow): string {
+    return `
+      <div class="svc-row" data-service="${esc(svc.id)}">
+        <div class="svc-row__head">
+          <h3 class="svc-row__title">${esc(svc.label)}</h3>
+          <p class="svc-row__sub">${esc(svc.description)}</p>
+        </div>
+        <span class="svc-row__state"
+              data-state="${esc(svc.currentStatus)}"
+              title="${esc(svc.currentMessage ?? '')}">
+          ${esc(svc.currentStatus)}
+        </span>
+        <div class="svc-row__bars" role="img"
+             aria-label="${svc.days.length}-day uptime history">
+          ${barsHtml(svc.days)}
+        </div>
+        ${uptimeStripHtml(svc.days)}
+      </div>
+    `;
+  }
+
+  function render(env: ServicesEnvelope | null): void {
+    const list = $('services-list');
+    const empty = $('services-empty');
+    if (!list || !empty) return;
+    if (!env || env.groups.length === 0) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      return;
+    }
+    empty.hidden = true;
+    list.innerHTML = env.groups.map((g) => {
+      const rows = g.services.map(rowHtml).join('');
+      return `
+        <section class="svc-group">
+          <header class="svc-group__head">
+            <h3 class="svc-group__title">${esc(g.label)}</h3>
+            <span class="svc-group__count">
+              ${g.services.length} service${g.services.length === 1 ? '' : 's'}
+            </span>
+          </header>
+          ${rows}
+        </section>
+      `;
+    }).join('');
+  }
+
+  const stop = startServicesPolling({
+    onUpdate(env) { render(env); },
+    onError() { /* keep last good render */ },
+  });
+  window.addEventListener('beforeunload', stop);
+</script>

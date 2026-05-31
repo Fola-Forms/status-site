@@ -1,0 +1,235 @@
+/* status.folaform.com — per-service breakdown + subscribe form.
+ *
+ * Mirrors the Statuspage.io layout: each group (Platform, Features,
+ * Vendor integrations) gets a stacked card; each service inside the
+ * card is one row with a label / current state / 90 day-bars / uptime
+ * % on the right.
+ */
+
+/* ───── Service group card ────────────────────────────────── */
+.svc-group {
+  margin: 0 0 22px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.svc-group__head {
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid var(--hairline-light);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.svc-group__title {
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 0;
+}
+.svc-group__count {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ───── Service row ───────────────────────────────────────── */
+.svc-row {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 6px 18px;
+  align-items: center;
+}
+.svc-row + .svc-row {
+  border-top: 1px solid var(--hairline-light);
+}
+.svc-row__head {
+  min-width: 0;
+}
+.svc-row__title {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  margin: 0;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.svc-row__sub {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin: 2px 0 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.svc-row__state {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+}
+.svc-row__state[data-state='OK'] {
+  background: var(--bg-green);
+  color: var(--green);
+  border-color: var(--green);
+}
+.svc-row__state[data-state='DEGRADED'] {
+  background: var(--bg-amber);
+  color: var(--amber);
+  border-color: var(--amber);
+}
+.svc-row__state[data-state='DOWN'] {
+  background: var(--bg-red);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.svc-row__bars {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(90, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 12px;
+}
+.svc-bar {
+  height: 28px;
+  border-radius: 2px;
+  background: var(--green);
+  cursor: default;
+  position: relative;
+  transition: transform 100ms ease;
+}
+.svc-bar:hover { transform: scaleY(1.08); }
+.svc-bar[data-state='OK']       { background: var(--green); }
+.svc-bar[data-state='DEGRADED'] { background: var(--amber); }
+.svc-bar[data-state='DOWN']     { background: var(--red); }
+.svc-bar[data-state='UNKNOWN']  { background: var(--hairline-shade); }
+
+.svc-row__uptime {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.svc-row__uptime strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.svc-row__uptime-label {
+  color: var(--ink-faint);
+}
+
+@media (max-width: 720px) {
+  .svc-row { padding: 14px 14px; }
+  .svc-row__bars { grid-template-columns: repeat(45, minmax(0, 1fr)); }
+  /* Hide the older half of the bars on narrow screens. */
+  .svc-bar:nth-child(n+46) { display: none; }
+}
+
+/* ───── Subscribe form ────────────────────────────────────── */
+.subscribe {
+  margin: 0 0 28px;
+  padding: 24px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.subscribe__title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: -0.008em;
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+.subscribe__sub {
+  font-family: var(--font-serif);
+  color: var(--ink-mute);
+  font-size: 14px;
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.subscribe__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: stretch;
+}
+.subscribe__input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--bg);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.subscribe__input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg-accent);
+}
+.subscribe__btn {
+  appearance: none;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+  white-space: nowrap;
+}
+.subscribe__btn:hover { background: var(--accent-hover, var(--accent)); }
+.subscribe__btn:active { transform: translateY(1px); }
+.subscribe__btn[disabled] {
+  background: var(--hairline-shade);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+.subscribe__msg {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  font-family: var(--font-serif);
+  color: var(--ink-mute);
+  min-height: 1.4em;
+  line-height: 1.45;
+}
+.subscribe__msg[data-tone='success'] { color: var(--green); }
+.subscribe__msg[data-tone='warn']    { color: var(--amber); }
+.subscribe__msg[data-tone='error']   { color: var(--red); }
+.subscribe__note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}

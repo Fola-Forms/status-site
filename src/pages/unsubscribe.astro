@@ -1,0 +1,76 @@
+---
+/**
+ * /unsubscribe — landing for the unsubscribe link in every
+ * status notification email. One-click flow: pull the signed
+ * token from the URL, POST to the backend, render outcome.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title="Unsubscribe · Fola Form Status"
+  description="Unsubscribe from Fola Form status updates."
+  canonical="https://status.folaform.com/unsubscribe"
+>
+  <div class="shell shell--narrow">
+    <section class="section">
+      <p class="section-eyebrow">Subscription</p>
+      <h1 class="section-title" id="unsub-title">
+        Unsubscribing…
+      </h1>
+      <div id="unsub-body" class="placeholder">
+        <strong>One moment</strong>
+        We're removing this address from the notification list.
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  import { unsubscribeSubscription } from '../lib/services-api';
+
+  function $(id: string): HTMLElement | null {
+    return document.getElementById(id);
+  }
+
+  function set(title: string, body: string, strong: string): void {
+    const t = $('unsub-title');
+    const b = $('unsub-body');
+    if (t) t.textContent = title;
+    if (b) b.innerHTML = `<strong>${strong}</strong>${body}`;
+  }
+
+  (async () => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (!token) {
+      set('Missing token',
+        'Open the unsubscribe link from your email — we couldn\'t find a token in this URL.',
+        'No token found');
+      return;
+    }
+    const outcome = await unsubscribeSubscription(token);
+    switch (outcome) {
+      case 'unsubscribed':
+        set("You're unsubscribed",
+          'You\'ll no longer receive status update emails. You can subscribe again any time from the homepage.',
+          'Unsubscribed');
+        break;
+      case 'already_unsubscribed':
+        set("Already unsubscribed",
+          'This address is already off the list — no further action needed.',
+          'Already removed');
+        break;
+      case 'invalid':
+        set('Link expired or invalid',
+          'This unsubscribe link is no longer valid. Use the link in the most recent notification email, or email support if you\'re stuck.',
+          'Link expired');
+        break;
+      case 'network':
+      default:
+        set('Network hiccup',
+          'We couldn\'t reach the server. Try refreshing in a minute — your token is still valid.',
+          'Try again');
+        break;
+    }
+  })();
+</script>
