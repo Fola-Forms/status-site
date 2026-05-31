@@ -1,0 +1,60 @@
+---
+/**
+ * Theme toggle button.
+ *
+ * Three states cycle on click: auto → light → dark → auto.
+ * "auto" follows prefers-color-scheme; "light" / "dark" lock the
+ * theme via html[data-theme] and persist in localStorage. The
+ * inline boot script (in BaseLayout's <head>) applies the
+ * persisted choice before paint to avoid a flash.
+ */
+---
+<button type="button"
+        class="site-header__theme"
+        id="theme-toggle"
+        aria-label="Toggle color theme"
+        title="Toggle color theme">
+  <!-- Sun (shown in dark mode) -->
+  <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2" stroke-linecap="round"
+       stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+  </svg>
+  <!-- Moon (shown in light mode) -->
+  <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2" stroke-linecap="round"
+       stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+</button>
+
+<script is:inline>
+  (function () {
+    const KEY = 'fola-status-theme';
+    const root = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+
+    function next(current) {
+      if (current === 'light') return 'dark';
+      if (current === 'dark')  return null;
+      return 'light';
+    }
+
+    function apply(value) {
+      if (value === 'light' || value === 'dark') {
+        root.dataset.theme = value;
+        try { localStorage.setItem(KEY, value); } catch (_) {}
+      } else {
+        delete root.dataset.theme;
+        try { localStorage.removeItem(KEY); } catch (_) {}
+      }
+    }
+
+    btn.addEventListener('click', () => {
+      const current = root.dataset.theme || null;
+      apply(next(current));
+    });
+  })();
+</script>

@@ -1,0 +1,30 @@
+# Netlify deployment config for status.folaform.com
+#
+# Build runs `npm run build` which invokes Astro; output lands in
+# `dist/`. The site shell is fully static; incident data hydrates
+# client-side from api.folaform.com (see src/lib/api.ts).
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Security headers — status site has no auth surface, but keep
+# the basics tight. Mirror docs-site / articles-site posture.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# The shell HTML should never be aggressively cached — we want
+# users to pick up new deploys quickly. The static assets are
+# already content-hashed by Astro so they cache themselves.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

@@ -1,0 +1,275 @@
+---
+/**
+ * Homepage — overall status banner, currently-active incidents,
+ * 30-day history grouped by day.
+ *
+ * The page shell (header, status banner skeleton, section
+ * scaffolding) renders at build time. Incident data hydrates
+ * client-side from the status polling loop in `src/lib/api.ts`.
+ * This keeps the site cheap to host (static on Netlify) and
+ * always showing current state without needing a redeploy.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StatusHeader from '../components/StatusHeader.astro';
+---
+<BaseLayout
+  title="Fola Form Status"
+  description="Live operational status for Fola Form — incidents, scheduled maintenance, and 30-day uptime history."
+  canonical="https://status.folaform.com/"
+>
+  <StatusHeader />
+
+  <div class="shell shell--narrow">
+    <!-- ───── Active incidents ───── -->
+    <section class="section" id="active-section" hidden>
+      <p class="section-eyebrow">Active</p>
+      <h2 class="section-title" id="active-title">
+        Currently active incidents
+      </h2>
+      <div id="active-list"></div>
+    </section>
+
+    <!-- ───── 30-day history ───── -->
+    <section class="section" id="history-section">
+      <p class="section-eyebrow">Past 30 days</p>
+      <h2 class="section-title">Incident history</h2>
+      <div id="history-list">
+        <!-- Skeletons during the initial fetch. -->
+        <div class="skeleton"></div>
+        <div class="skeleton" style="width:80%"></div>
+        <div class="skeleton" style="width:65%"></div>
+      </div>
+      <p id="history-empty"
+         class="placeholder"
+         hidden>
+        <strong>Nothing to report</strong>
+        No incidents in the last 30 days. Quiet skies.
+      </p>
+      <p style="margin-top:18px;text-align:center;font-size:13.5px;color:var(--ink-mute);">
+        Looking further back? <a href="/history">See extended history &rarr;</a>
+      </p>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  /**
+   * Hydration script for the homepage. Owns the polling loop +
+   * renders the banner, active list, and 30-day history grouped
+   * by day. Kept in this file (not in lib/) because the rendering
+   * is page-specific; the polling itself comes from lib/api.ts.
+   */
+  import {
+    startStatusPolling,
+    getCachedEnvelope,
+    type IncidentView,
+    type StatusEnvelope,
+    type PollMeta,
+  } from '../lib/api';
+  import {
+    bannerStateFor,
+    bannerCopy,
+    statusLabel,
+    severityLabel,
+    dayState,
+    type BannerState,
+  } from '../lib/severity';
+  import {
+    relativeTime,
+    longDay,
+    dayKey,
+  } from '../lib/time';
+
+  function $(id: string): HTMLElement | null {
+    return document.getElementById(id);
+  }
+
+  function esc(s: string): string {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;',
+      '"': '&quot;', "'": '&#39;',
+    }[c] as string));
+  }
+
+  // SVG icon set for each banner state.
+  const ICONS: Record<BannerState | 'unknown', string> = {
+    operational: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12 10 17 19 7"/></svg>`,
+    maintenance: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.5-2.5z"/></svg>`,
+    degraded:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0Z"/></svg>`,
+    outage:      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>`,
+    unknown:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>`,
+  };
+
+  function renderBanner(env: StatusEnvelope | null, meta: PollMeta): void {
+    const banner = $('status-banner');
+    const icon   = $('status-banner-icon');
+    const title  = $('status-banner-title');
+    const sub    = $('status-banner-sub');
+    const stamp  = $('status-banner-stamp-text');
+    const off    = $('status-banner-offline');
+    if (!banner || !icon || !title || !sub || !stamp || !off) return;
+
+    if (env === null) {
+      // No payload (initial render OR first fetch failed). Hold
+      // a neutral state.
+      banner.dataset.state = 'unknown';
+      icon.innerHTML = ICONS.unknown;
+      title.textContent = meta.isOffline
+        ? "We can't reach the status API"
+        : 'Checking status…';
+      sub.textContent = meta.isOffline
+        ? 'Showing the most recent state we have. Retrying every 30 seconds.'
+        : 'Loading the latest from api.folaform.com.';
+    } else if (!env.enabled) {
+      // Feature flag off — treat as all clear.
+      banner.dataset.state = 'operational';
+      icon.innerHTML = ICONS.operational;
+      const copy = bannerCopy('operational');
+      title.textContent = copy.title;
+      sub.textContent = copy.sub;
+    } else {
+      const state = bannerStateFor(env.open);
+      banner.dataset.state = state;
+      icon.innerHTML = ICONS[state];
+      const copy = bannerCopy(state);
+      title.textContent = copy.title;
+      sub.textContent = copy.sub;
+    }
+
+    stamp.textContent = meta.lastSuccessAt
+      ? `Last checked ${relativeTime(meta.lastSuccessAt)}`
+      : 'Last checked: never';
+    off.hidden = !meta.isOffline;
+  }
+
+  function incidentCardHtml(inc: IncidentView): string {
+    const meta: string[] = [
+      `<span>Started <time datetime="${esc(inc.startedAt)}">${esc(relativeTime(inc.startedAt))}</time></span>`,
+    ];
+    if (inc.resolvedAt) {
+      meta.push(
+        `<span>Resolved <time datetime="${esc(inc.resolvedAt)}">${esc(relativeTime(inc.resolvedAt))}</time></span>`,
+      );
+    }
+    if (inc.updates.length > 0) {
+      meta.push(`<span>${inc.updates.length} update${inc.updates.length === 1 ? '' : 's'}</span>`);
+    }
+    const body = inc.body
+      ? `<p class="incident-card__body">${esc(inc.body)}</p>`
+      : '';
+    return `
+      <a class="incident-card" href="/incidents/${encodeURIComponent(inc.id)}">
+        <div class="incident-card__head">
+          <h3 class="incident-card__title">${esc(inc.title)}</h3>
+          <span class="stat" data-stat="${esc(inc.status)}">
+            <span class="stat__dot"></span>
+            ${esc(statusLabel(inc.status))}
+          </span>
+          <span class="sev" data-sev="${esc(inc.severity)}">${esc(severityLabel(inc.severity))}</span>
+        </div>
+        ${body}
+        <div class="incident-card__meta">${meta.join('')}</div>
+      </a>
+    `;
+  }
+
+  function renderActive(env: StatusEnvelope | null): void {
+    const section = $('active-section');
+    const list    = $('active-list');
+    const title   = $('active-title');
+    if (!section || !list || !title) return;
+
+    const open = env?.open ?? [];
+    if (open.length === 0) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    title.textContent = open.length === 1
+      ? 'Currently active incident'
+      : `${open.length} active incidents`;
+    list.innerHTML = open.map(incidentCardHtml).join('');
+  }
+
+  function renderHistory(env: StatusEnvelope | null): void {
+    const list  = $('history-list');
+    const empty = $('history-empty');
+    if (!list || !empty) return;
+
+    const recent = env?.recent ?? [];
+    if (recent.length === 0) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      return;
+    }
+    empty.hidden = true;
+
+    // Bucket by day of `startedAt`. Sort buckets newest first.
+    const byDay = new Map<string, IncidentView[]>();
+    for (const inc of recent) {
+      const key = dayKey(inc.startedAt);
+      const bucket = byDay.get(key) ?? [];
+      bucket.push(inc);
+      byDay.set(key, bucket);
+    }
+    const keys = [...byDay.keys()].sort((a, b) => (a < b ? 1 : -1));
+
+    list.innerHTML = keys.map((k) => {
+      const bucket = byDay.get(k)!;
+      const cards = bucket.map(incidentCardHtml).join('');
+      const state = dayState(bucket);
+      const stateLabel =
+        state === 'operational' ? '' :
+        state === 'maintenance' ? 'Maintenance window' :
+        state === 'degraded'    ? 'Degraded service'   :
+                                   'Outage';
+      const sample = bucket[0]!;
+      return `
+        <section class="history-day">
+          <header class="history-day__head">
+            <h3 class="history-day__date">${esc(longDay(sample.startedAt))}</h3>
+            <span class="history-day__count">${esc(stateLabel)}</span>
+          </header>
+          ${cards}
+        </section>
+      `;
+    }).join('');
+  }
+
+  // ───── Boot ─────
+  let currentEnv: StatusEnvelope | null = null;
+
+  function rerender(meta: PollMeta): void {
+    renderBanner(currentEnv, meta);
+    renderActive(currentEnv);
+    renderHistory(currentEnv);
+  }
+
+  const stop = startStatusPolling({
+    onUpdate(env, meta) {
+      currentEnv = env;
+      rerender(meta);
+    },
+    onError(_err, meta) {
+      // We keep whatever we last rendered; only the banner picks
+      // up the "offline" chip.
+      rerender(meta);
+    },
+  });
+
+  // Update the "Last checked Nm ago" stamp every 15 seconds so
+  // it doesn't go stale between polls.
+  const stampTimer = window.setInterval(() => {
+    const stamp = $('status-banner-stamp-text');
+    if (!stamp) return;
+    const { lastSuccessAt } = getCachedEnvelope();
+    stamp.textContent = lastSuccessAt
+      ? `Last checked ${relativeTime(lastSuccessAt)}`
+      : 'Last checked: never';
+  }, 15_000);
+
+  window.addEventListener('beforeunload', () => {
+    stop();
+    window.clearInterval(stampTimer);
+  });
+</script>

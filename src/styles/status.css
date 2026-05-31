@@ -1,0 +1,507 @@
+/* status.folaform.com — page-specific styles.
+ *
+ * Tokens + chrome (header, footer, theme toggle) live in
+ * ./global.css. Anything that paints the actual status surface —
+ * banner sash, severity badges, incident cards, timeline,
+ * history grid, skeleton placeholders — lives here.
+ *
+ * Keeping the two split keeps each file under the 800-line house
+ * cap and makes it obvious which rules are reusable across other
+ * Fola Form Astro surfaces.
+ */
+
+/* ───── Status banner — the big sash at the top ───────────── */
+.status-banner {
+  position: relative;
+  padding: 36px 0 32px;
+  border-bottom: 1px solid var(--hairline);
+  overflow: hidden;
+}
+.status-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+.status-banner__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+.status-banner__icon svg {
+  width: 28px;
+  height: 28px;
+  color: #fff;
+}
+.status-banner__body {
+  flex: 1;
+  min-width: 0;
+}
+.status-banner__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 3.4vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  margin: 0 0 4px;
+  color: #fff;
+}
+.status-banner__sub {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 14.5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.status-banner__sub time,
+.status-banner__sub .status-banner__chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.status-banner__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.18);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  text-transform: uppercase;
+}
+.status-banner__chip[data-tone='warn'] {
+  background: rgba(0, 0, 0, 0.28);
+}
+.status-banner__chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #fff;
+}
+.status-banner__chip[data-tone='warn'] .status-banner__chip-dot {
+  background: #fde68a;
+  box-shadow: 0 0 0 2px rgba(253, 230, 138, 0.35);
+  animation: pulseChip 1.6s ease-in-out infinite;
+}
+@keyframes pulseChip {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.status-banner[data-state='operational'] {
+  background: linear-gradient(135deg, #137333 0%, #1e8e3e 100%);
+}
+.status-banner[data-state='maintenance'] {
+  background: linear-gradient(135deg, #1a73e8 0%, #4285f4 100%);
+}
+.status-banner[data-state='degraded'] {
+  background: linear-gradient(135deg, #b06d18 0%, #d99c4d 100%);
+}
+.status-banner[data-state='outage'] {
+  background: linear-gradient(135deg, #a50e0e 0%, #c5221f 100%);
+}
+.status-banner[data-state='unknown'] {
+  background: linear-gradient(135deg, #5f6368 0%, #80868b 100%);
+}
+
+/* ───── Severity badge ────────────────────────────────────── */
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.sev[data-sev='MINOR'] {
+  background: var(--bg-amber);
+  color: var(--amber);
+  border-color: var(--amber);
+}
+.sev[data-sev='MAJOR'],
+.sev[data-sev='CRITICAL'] {
+  background: var(--bg-red);
+  color: var(--red);
+  border-color: var(--red);
+}
+.sev[data-sev='MAINTENANCE'] {
+  background: var(--bg-accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+/* ───── Status pill (OPEN / MONITORING / RESOLVED) ───────── */
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--bg-sunken);
+  color: var(--ink-mute);
+  border: 1px solid var(--hairline);
+}
+.stat[data-stat='OPEN'] {
+  background: var(--bg-red);
+  color: var(--red);
+  border-color: var(--red);
+}
+.stat[data-stat='MONITORING'] {
+  background: var(--bg-amber);
+  color: var(--amber);
+  border-color: var(--amber);
+}
+.stat[data-stat='RESOLVED'] {
+  background: var(--bg-green);
+  color: var(--green);
+  border-color: var(--green);
+}
+.stat__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.stat[data-stat='OPEN'] .stat__dot,
+.stat[data-stat='MONITORING'] .stat__dot {
+  animation: pulseChip 1.6s ease-in-out infinite;
+}
+
+/* ───── Section heading ──────────────────────────────────── */
+.section-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: -0.015em;
+  margin: 0 0 18px;
+  color: var(--ink);
+}
+
+/* ───── Incident card ────────────────────────────────────── */
+.incident-card {
+  display: block;
+  padding: 22px 24px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--ink);
+  transition: border-color 140ms ease, transform 140ms ease,
+              box-shadow 140ms ease;
+}
+.incident-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-hover);
+  text-decoration: none;
+}
+.incident-card + .incident-card {
+  margin-top: 12px;
+}
+.incident-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.incident-card__title {
+  font-family: var(--font-display);
+  font-size: 1.18rem;
+  line-height: 1.28;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink);
+  letter-spacing: -0.012em;
+}
+.incident-card__body {
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.incident-card__meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: var(--ink-mute);
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+}
+.incident-card__meta time {
+  color: var(--ink-mute);
+}
+
+/* ───── Incident detail body ─────────────────────────────── */
+.incident-detail {
+  padding: 36px 0 24px;
+}
+.incident-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-mute);
+  text-decoration: none;
+}
+.incident-detail__back:hover {
+  color: var(--accent);
+}
+.incident-detail__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.incident-detail__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  letter-spacing: -0.022em;
+  margin: 6px 0 14px;
+  color: var(--ink);
+}
+.incident-detail__times {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin: 0 0 22px;
+  padding: 14px 18px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.incident-detail__times dt {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 2px;
+}
+.incident-detail__times dd {
+  margin: 0;
+  color: var(--ink);
+}
+.incident-detail__body {
+  font-family: var(--font-serif);
+  font-size: 1.08rem;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  margin-bottom: 32px;
+}
+.incident-detail__body p {
+  margin: 0 0 1em;
+}
+
+/* ───── Timeline of updates ──────────────────────────────── */
+.timeline {
+  position: relative;
+  padding-left: 28px;
+  margin: 0;
+  list-style: none;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 8px;
+  width: 2px;
+  background: var(--hairline);
+  border-radius: 2px;
+}
+.timeline__item {
+  position: relative;
+  padding: 0 0 22px 8px;
+}
+.timeline__item:last-child {
+  padding-bottom: 0;
+}
+.timeline__dot {
+  position: absolute;
+  left: -28px;
+  top: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--bg-raised);
+  border: 2.5px solid var(--accent);
+  box-shadow: 0 0 0 4px var(--bg);
+}
+.timeline__item--latest .timeline__dot {
+  background: var(--accent);
+}
+.timeline__time {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  margin-bottom: 4px;
+}
+.timeline__body {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  font-family: var(--font-serif);
+}
+
+/* ───── History grid (per-day dots) ──────────────────────── */
+.history-day {
+  margin: 0 0 28px;
+}
+.history-day__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline-light);
+}
+.history-day__date {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  margin: 0;
+  color: var(--ink);
+}
+.history-day__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.history-day__empty {
+  font-family: var(--font-serif);
+  color: var(--ink-mute);
+  font-size: 14px;
+  margin: 6px 0 0;
+}
+
+/* Month group on /history */
+.history-month {
+  margin: 0 0 44px;
+}
+.history-month__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: -0.012em;
+  margin: 0 0 14px;
+  color: var(--ink);
+}
+.history-month__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  gap: 4px;
+  padding: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+.day-dot {
+  aspect-ratio: 1 / 2.4;
+  border-radius: 3px;
+  background: var(--green);
+  position: relative;
+  cursor: default;
+  transition: transform 100ms ease;
+}
+.day-dot:hover {
+  transform: scaleY(1.04);
+}
+.day-dot[data-state='operational'] { background: var(--green); }
+.day-dot[data-state='maintenance'] { background: var(--accent); }
+.day-dot[data-state='degraded']    { background: var(--amber); }
+.day-dot[data-state='outage']      { background: var(--red); }
+.day-dot[data-state='unknown'] {
+  background: var(--hairline-shade);
+}
+
+/* ───── Empty / loading / error states ───────────────────── */
+.placeholder {
+  padding: 22px 24px;
+  background: var(--bg-raised);
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius);
+  color: var(--ink-mute);
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  text-align: center;
+}
+.placeholder strong {
+  display: block;
+  font-family: var(--font-display);
+  color: var(--ink);
+  font-size: 1.05rem;
+  margin-bottom: 4px;
+  letter-spacing: -0.005em;
+}
+
+.skeleton {
+  height: 90px;
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    var(--bg-raised) 0%,
+    var(--bg-sunken) 50%,
+    var(--bg-raised) 100%
+  );
+  background-size: 200% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+  margin-bottom: 12px;
+  border: 1px solid var(--hairline);
+}
+@keyframes skel {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0 0;    }
+}
+
+.section {
+  padding: 36px 0;
+}
+.section + .section {
+  padding-top: 8px;
+}

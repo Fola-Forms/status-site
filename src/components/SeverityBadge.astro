@@ -1,0 +1,17 @@
+---
+/**
+ * Tiny coloured pill for an incident's severity.
+ * Colours come from the global palette via [data-sev] in
+ * global.css.
+ */
+import type { Severity } from '../lib/api';
+import { severityLabel } from '../lib/severity';
+
+export interface Props {
+  severity: Severity;
+}
+const { severity } = Astro.props;
+---
+<span class="sev" data-sev={severity}>
+  {severityLabel(severity)}
+</span>

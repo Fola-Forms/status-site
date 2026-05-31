@@ -1,0 +1,284 @@
+---
+/**
+ * Single incident detail. Title, severity + status, started /
+ * resolved timestamps, body (light markdown — paragraph splits
+ * on \n\n, single newlines as <br>), full timeline of updates
+ * newest-first.
+ *
+ * Incident IDs change continuously as the on-call posts new ones,
+ * so we do NOT bake per-incident pages at build time. Instead,
+ * this single template renders for any id and the client-side
+ * fetch looks up the matching incident in the public envelope.
+ *
+ * We set `getStaticPaths` to return an empty array — but for
+ * static output, that would mean no pages get generated.
+ * Workaround: we set `prerender: false` so Astro treats this as
+ * a runtime route... except Netlify static won't run server
+ * code. Trade-off chosen: we DO emit a single placeholder page
+ * at "/incidents/_placeholder" and configure Netlify to redirect
+ * `/incidents/*` to it. Simpler alternative: emit the SAME shell
+ * for a small set of known IDs at build time via a getStaticPaths
+ * that returns the empty list with `fallback: true`. Astro 6
+ * doesn't support `fallback: true` for static output, so we go
+ * with a Netlify redirect.
+ *
+ * Implementation: this file IS the shell. The path is wildcarded
+ * to `[id]` and we always serve the same HTML, letting the client
+ * script pull the id out of the URL and fetch the matching
+ * incident. Netlify will 404 by default, so we add a SPA-style
+ * redirect in netlify.toml... but the user said "no SSR; use
+ * static output". We sidestep by pre-rendering ONLY the
+ * `_placeholder` slug and letting Netlify catch-all redirect.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  // Single placeholder page; the [id].astro template renders the
+  // same shell regardless of which incident the URL identifies.
+  // The Netlify _redirects file rewrites /incidents/* to this
+  // page so deep links resolve.
+  return [{ params: { id: '_placeholder' } }];
+}
+---
+<BaseLayout
+  title="Incident · Fola Form Status"
+  description="Live incident detail — severity, status, timeline of updates."
+  canonical="https://status.folaform.com/incidents/"
+>
+  <div class="shell shell--narrow incident-detail">
+    <a href="/" class="incident-detail__back">
+      &larr; Back to status
+    </a>
+
+    <div id="incident-loading">
+      <div class="skeleton" style="height:32px;width:60%;margin-bottom:14px"></div>
+      <div class="skeleton" style="height:90px"></div>
+      <div class="skeleton" style="height:120px"></div>
+    </div>
+
+    <div id="incident-error" class="placeholder" hidden>
+      <strong>Couldn't load this incident</strong>
+      <span id="incident-error-detail">
+        The status API is unreachable. We'll keep trying every
+        30 seconds.
+      </span>
+    </div>
+
+    <div id="incident-missing" class="placeholder" hidden>
+      <strong>Incident not found</strong>
+      This incident ID doesn't match anything in the last 30 days
+      of history. It may have aged out, or the link may be wrong.
+      <br/><br/>
+      <a href="/">&larr; Back to current status</a>
+    </div>
+
+    <article id="incident-detail-root" hidden>
+      <div class="incident-detail__head">
+        <span class="stat" id="incident-stat">
+          <span class="stat__dot"></span>
+          <span id="incident-stat-label"></span>
+        </span>
+        <span class="sev" id="incident-sev">
+          <span id="incident-sev-label"></span>
+        </span>
+      </div>
+      <h1 class="incident-detail__title" id="incident-title"></h1>
+
+      <dl class="incident-detail__times">
+        <div>
+          <dt>Started</dt>
+          <dd id="incident-started"></dd>
+        </div>
+        <div id="incident-resolved-wrap">
+          <dt>Resolved</dt>
+          <dd id="incident-resolved"></dd>
+        </div>
+        <div>
+          <dt>Last update</dt>
+          <dd id="incident-last-update"></dd>
+        </div>
+      </dl>
+
+      <div class="incident-detail__body" id="incident-body"></div>
+
+      <h2 class="section-title" style="margin-top:36px;">
+        Update timeline
+      </h2>
+      <ol class="timeline" id="incident-timeline"></ol>
+    </article>
+  </div>
+</BaseLayout>
+
+<script>
+  /**
+   * Read the incident id out of the URL (last path segment),
+   * fetch the envelope, find the matching incident, and render
+   * the detail view. Polls every 30s like the homepage so updates
+   * stream in live while a user has the page open.
+   */
+  import {
+    startStatusPolling,
+    type IncidentView,
+    type StatusEnvelope,
+    type PollMeta,
+  } from '../../lib/api';
+  import {
+    severityLabel,
+    statusLabel,
+  } from '../../lib/severity';
+  import {
+    relativeTime,
+    absoluteTime,
+  } from '../../lib/time';
+
+  function $(id: string): HTMLElement | null {
+    return document.getElementById(id);
+  }
+
+  function esc(s: string): string {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;',
+      '"': '&quot;', "'": '&#39;',
+    }[c] as string));
+  }
+
+  /** Light markdown — \n\n → <p>, single \n → <br>. */
+  function lightMarkdown(text: string): string {
+    if (!text) return '';
+    return text
+      .trim()
+      .split(/\n{2,}/)
+      .map((p) => `<p>${esc(p).replace(/\n/g, '<br/>')}</p>`)
+      .join('');
+  }
+
+  function getIncidentId(): string {
+    // URL shape: /incidents/<id> or /incidents/<id>/. Strip the
+    // path down to the segment after "incidents".
+    const path = window.location.pathname.replace(/\/+$/, '');
+    const parts = path.split('/');
+    const idx = parts.lastIndexOf('incidents');
+    if (idx === -1 || idx === parts.length - 1) return '';
+    return decodeURIComponent(parts[idx + 1] ?? '');
+  }
+
+  function findIncident(
+    env: StatusEnvelope,
+    id: string,
+  ): IncidentView | null {
+    return (
+      env.open.find((i) => i.id === id) ??
+      env.recent.find((i) => i.id === id) ??
+      null
+    );
+  }
+
+  function render(env: StatusEnvelope | null, meta: PollMeta): void {
+    const loading = $('incident-loading');
+    const error   = $('incident-error');
+    const missing = $('incident-missing');
+    const root    = $('incident-detail-root');
+    if (!loading || !error || !missing || !root) return;
+
+    const id = getIncidentId();
+
+    if (env === null && meta.isOffline) {
+      loading.hidden = true;
+      error.hidden = false;
+      missing.hidden = true;
+      root.hidden = true;
+      return;
+    }
+    if (env === null) {
+      // Still loading.
+      return;
+    }
+
+    const inc = findIncident(env, id);
+    if (!inc) {
+      loading.hidden = true;
+      error.hidden = true;
+      missing.hidden = false;
+      root.hidden = true;
+      return;
+    }
+
+    loading.hidden = true;
+    error.hidden = true;
+    missing.hidden = true;
+    root.hidden = false;
+
+    // Top-line pills
+    $('incident-stat')?.setAttribute('data-stat', inc.status);
+    const statLabel = $('incident-stat-label');
+    if (statLabel) statLabel.textContent = statusLabel(inc.status);
+
+    $('incident-sev')?.setAttribute('data-sev', inc.severity);
+    const sevLabel = $('incident-sev-label');
+    if (sevLabel) sevLabel.textContent = severityLabel(inc.severity);
+
+    const title = $('incident-title');
+    if (title) title.textContent = inc.title;
+
+    const started = $('incident-started');
+    if (started) started.textContent = absoluteTime(inc.startedAt);
+
+    const resolvedWrap = $('incident-resolved-wrap');
+    const resolved = $('incident-resolved');
+    if (inc.resolvedAt && resolved && resolvedWrap) {
+      resolvedWrap.hidden = false;
+      resolved.textContent = absoluteTime(inc.resolvedAt);
+    } else if (resolvedWrap) {
+      resolvedWrap.hidden = true;
+    }
+
+    const lastUpdate = $('incident-last-update');
+    const latest = inc.updates[0]?.postedAt ?? inc.startedAt;
+    if (lastUpdate) lastUpdate.textContent = relativeTime(latest);
+
+    const body = $('incident-body');
+    if (body) body.innerHTML = lightMarkdown(inc.body);
+
+    const tl = $('incident-timeline');
+    if (tl) {
+      const sorted = [...inc.updates].sort(
+        (a, b) =>
+          new Date(b.postedAt).getTime() -
+          new Date(a.postedAt).getTime(),
+      );
+      if (sorted.length === 0) {
+        tl.innerHTML = `
+          <li class="placeholder" style="border:1px dashed var(--hairline);list-style:none;">
+            <strong>No updates yet</strong>
+            The incident has been opened — engineering will post
+            an update shortly.
+          </li>
+        `;
+      } else {
+        tl.innerHTML = sorted.map((upd, i) => `
+          <li class="timeline__item${i === 0 ? ' timeline__item--latest' : ''}">
+            <span class="timeline__dot" aria-hidden="true"></span>
+            <time class="timeline__time" datetime="${esc(upd.postedAt)}">
+              ${esc(absoluteTime(upd.postedAt))} · posted ${esc(relativeTime(upd.postedAt))}
+            </time>
+            <p class="timeline__body">${esc(upd.body).replace(/\n/g, '<br/>')}</p>
+          </li>
+        `).join('');
+      }
+    }
+
+    // Reflect incident title in the document <title>.
+    document.title = `${inc.title} · Fola Form Status`;
+  }
+
+  const stop = startStatusPolling({
+    onUpdate(env, meta) {
+      render(env, meta);
+    },
+    onError(_err, meta) {
+      render(null, meta);
+    },
+  });
+
+  window.addEventListener('beforeunload', stop);
+</script>

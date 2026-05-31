@@ -1,0 +1,179 @@
+---
+/**
+ * Shared HTML shell — head with SEO meta, sticky header with logo
+ * + nav + theme toggle, main slot, structured footer. Every page
+ * on status.folaform.com extends this.
+ *
+ * The inline boot script in <head> applies the user's persisted
+ * theme choice before paint, so dark-mode users don't get a flash
+ * of light content on navigation.
+ */
+import '../styles/global.css';
+import '../styles/status.css';
+import ThemeToggle from '../components/ThemeToggle.astro';
+import logoLight from '../assets/fola-logo-light.png';
+import logoDark  from '../assets/fola-logo-dark.png';
+
+export interface Props {
+  title: string;
+  description: string;
+  canonical: string;
+  ogImage?: string;
+}
+
+const {
+  title,
+  description,
+  canonical,
+  ogImage = 'https://status.folaform.com/og-image.png',
+} = Astro.props;
+
+const path = Astro.url.pathname;
+const isActive = (prefix: string) =>
+  prefix === '/' ? path === '/' : path.startsWith(prefix);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#17181b" media="(prefers-color-scheme: dark)" />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <!-- Pre-paint theme application — eliminates flash on dark mode. -->
+    <script is:inline>
+      (function () {
+        try {
+          var v = localStorage.getItem('fola-status-theme');
+          if (v === 'dark' || v === 'light') {
+            document.documentElement.dataset.theme = v;
+          }
+        } catch (_) {}
+      })();
+    </script>
+
+    <!-- OpenGraph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:site_name" content="Fola Form — Status" />
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Favicons -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon-dark.ico" sizes="any"
+          media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
+    <link rel="icon" type="image/png" href="/icon-512.png" sizes="512x512" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="shell site-header__inner">
+        <a class="site-header__brand" href="/">
+          <img class="brand-logo-light" src={logoLight.src} alt="Fola Form" width="120" height="32" />
+          <img class="brand-logo-dark"  src={logoDark.src}  alt="Fola Form" width="120" height="32" />
+          <span class="site-header__brand-text">
+            Status<span> · Fola Form</span>
+          </span>
+        </a>
+        <nav class="site-header__nav" aria-label="Primary">
+          <a href="/"
+             class="site-header__nav-key"
+             aria-current={isActive('/') && path === '/' ? 'page' : undefined}
+          >Current</a>
+          <a href="/history"
+             class="site-header__nav-key"
+             aria-current={isActive('/history') ? 'page' : undefined}
+          >History</a>
+          <a
+            href="https://folaform.com"
+            target="_blank"
+            rel="noopener"
+          >Workspace ↗</a>
+          <a
+            href="https://docs.folaform.com"
+            target="_blank"
+            rel="noopener"
+          >Docs ↗</a>
+          <ThemeToggle />
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell">
+        <div class="site-footer__inner">
+          <div class="site-footer__brand">
+            <div class="site-footer__brand-row">
+              <img class="brand-logo-light" src={logoLight.src} alt="Fola Form" width="120" height="24" />
+              <img class="brand-logo-dark"  src={logoDark.src}  alt="Fola Form" width="120" height="24" />
+              <strong>Status</strong>
+            </div>
+            <p style="margin:0;max-width:46ch;line-height:1.55;">
+              Live operational status for Fola Form — the
+              compliance forms engine. Incidents post the moment
+              engineering opens them; updates land here within
+              about thirty seconds.
+            </p>
+          </div>
+
+          <div class="site-footer__col">
+            <h4>Status</h4>
+            <ul>
+              <li><a href="/">Current status</a></li>
+              <li><a href="/history">30-day history</a></li>
+              <li>
+                <a href="mailto:status-subscribe@folaform.com">
+                  Subscribe to updates
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="site-footer__col">
+            <h4>Fola Form</h4>
+            <ul>
+              <li><a href="https://folaform.com" target="_blank" rel="noopener">Workspace ↗</a></li>
+              <li><a href="https://docs.folaform.com" target="_blank" rel="noopener">Documentation ↗</a></li>
+              <li><a href="https://articles.folaform.com" target="_blank" rel="noopener">Articles ↗</a></li>
+            </ul>
+          </div>
+
+          <div class="site-footer__col">
+            <h4>Legal</h4>
+            <ul>
+              <li><a href="https://folaform.com/legal/privacy">Privacy</a></li>
+              <li><a href="https://folaform.com/legal/terms">Terms</a></li>
+              <li><a href="https://folaform.com/legal/security">Security</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="site-footer__legal">
+          © {new Date().getFullYear()} Fola Form — compliance forms
+          engine for immigration practice. Status data sourced live
+          from <code>api.folaform.com</code>; cached client-side
+          for graceful offline rendering.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

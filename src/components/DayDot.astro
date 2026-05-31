@@ -1,0 +1,31 @@
+---
+/**
+ * One coloured dot on the per-day uptime grid. Dot colour comes
+ * from [data-state] in global.css.
+ */
+import type { BannerState } from '../lib/severity';
+import { longDay } from '../lib/time';
+
+export interface Props {
+  date: Date | string;
+  state: BannerState | 'unknown';
+  incidentCount?: number;
+}
+
+const { date, state, incidentCount = 0 } = Astro.props;
+const labelDate = longDay(date);
+const labelState =
+  state === 'operational' ? 'all systems operational' :
+  state === 'maintenance' ? 'planned maintenance'     :
+  state === 'degraded'    ? 'degraded performance'    :
+  state === 'outage'      ? 'outage reported'         :
+                            'no data';
+const title = `${labelDate} — ${labelState}` +
+  (incidentCount > 0
+    ? ` (${incidentCount} incident${incidentCount === 1 ? '' : 's'})`
+    : '');
+---
+<span class="day-dot"
+      data-state={state}
+      title={title}
+      aria-label={title}></span>

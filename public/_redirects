@@ -1,0 +1,8 @@
+# Netlify route rewrites.
+#
+# Incident detail uses a wildcarded URL but a single static HTML
+# template — the incident id is read from the URL client-side and
+# the matching incident is found in the public status envelope at
+# api.folaform.com. Rewrite every /incidents/<id> request to the
+# placeholder page so it resolves with a 200.
+/incidents/*  /incidents/_placeholder.html  200

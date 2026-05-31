@@ -1,0 +1,41 @@
+---
+/**
+ * Vertical timeline of an incident's updates, newest first.
+ * Used inside the incident-detail page. The "latest" item gets a
+ * filled dot.
+ */
+import type { UpdateView } from '../lib/api';
+import { relativeTime, absoluteTime } from '../lib/time';
+
+export interface Props {
+  updates: UpdateView[];
+}
+
+const { updates } = Astro.props;
+// Sort newest first defensively — backend already returns this
+// way, but if a caller passes the raw list we still render
+// correctly.
+const sorted = [...updates].sort(
+  (a, b) =>
+    new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime(),
+);
+---
+{sorted.length === 0 ? (
+  <p class="placeholder">
+    <strong>No updates yet</strong>
+    The incident has been opened — engineering will post an update
+    shortly.
+  </p>
+) : (
+  <ol class="timeline">
+    {sorted.map((upd, i) => (
+      <li class={`timeline__item${i === 0 ? ' timeline__item--latest' : ''}`}>
+        <span class="timeline__dot" aria-hidden="true"></span>
+        <time class="timeline__time" datetime={upd.postedAt}>
+          {absoluteTime(upd.postedAt)} · posted {relativeTime(upd.postedAt)}
+        </time>
+        <p class="timeline__body">{upd.body}</p>
+      </li>
+    ))}
+  </ol>
+)}

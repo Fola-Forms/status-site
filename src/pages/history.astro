@@ -1,0 +1,192 @@
+---
+/**
+ * Extended history view. The current backend exposes 30 days of
+ * recent incidents on the public envelope; we group those by
+ * MONTH and render a per-day uptime grid.
+ *
+ * TODO: when the backend gains a 90-day public endpoint
+ * (e.g. /api/public/v1/incidents/history?days=90), swap
+ * `recent` for the larger window. The shape of the response is
+ * expected to be identical (an array of IncidentView) so the
+ * grouping + grid renderer below can be reused as-is.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title="History · Fola Form Status"
+  description="Recent incident history for Fola Form, grouped by month with per-day uptime."
+  canonical="https://status.folaform.com/history"
+>
+  <div class="shell shell--narrow" style="padding-top:36px;">
+    <p class="section-eyebrow">History</p>
+    <h1 style="font-size:clamp(1.8rem,4vw,2.4rem);margin:0 0 8px;">
+      Past 30 days of incidents
+    </h1>
+    <p style="margin:0 0 28px;color:var(--ink-soft);font-family:var(--font-serif);font-size:1.06rem;line-height:1.6;">
+      Each cell below is one day. Green is operational; amber is
+      degraded; red is an outage; blue is a planned maintenance
+      window. Hover for the day's headline.
+    </p>
+
+    <div id="history-loading">
+      <div class="skeleton" style="height:120px"></div>
+      <div class="skeleton" style="height:120px"></div>
+    </div>
+
+    <div id="history-error"
+         class="placeholder"
+         hidden>
+      <strong>Couldn't reach the status API</strong>
+      We'll keep trying every 30 seconds. The chart below will
+      populate the moment the connection comes back.
+    </div>
+
+    <div id="history-content" hidden></div>
+  </div>
+</BaseLayout>
+
+<script>
+  import {
+    startStatusPolling,
+    type IncidentView,
+    type StatusEnvelope,
+    type PollMeta,
+  } from '../lib/api';
+  import {
+    dayState,
+    type BannerState,
+  } from '../lib/severity';
+  import {
+    dayKey,
+    longDay,
+    monthLabel,
+  } from '../lib/time';
+
+  function $(id: string): HTMLElement | null {
+    return document.getElementById(id);
+  }
+  function esc(s: string): string {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;',
+      '"': '&quot;', "'": '&#39;',
+    }[c] as string));
+  }
+
+  function bucketByDay(
+    incidents: IncidentView[],
+  ): Map<string, IncidentView[]> {
+    const out = new Map<string, IncidentView[]>();
+    for (const inc of incidents) {
+      const k = dayKey(inc.startedAt);
+      const bucket = out.get(k) ?? [];
+      bucket.push(inc);
+      out.set(k, bucket);
+    }
+    return out;
+  }
+
+  function lastNDates(n: number): Date[] {
+    const out: Date[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 0; i < n; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      out.push(d);
+    }
+    return out;
+  }
+
+  function dayDotHtml(
+    date: Date,
+    state: BannerState | 'unknown',
+    incidentCount: number,
+  ): string {
+    const labelDate = longDay(date);
+    const labelState =
+      state === 'operational' ? 'all systems operational' :
+      state === 'maintenance' ? 'planned maintenance'     :
+      state === 'degraded'    ? 'degraded performance'    :
+      state === 'outage'      ? 'outage reported'         :
+                                 'no data';
+    const title = `${labelDate} — ${labelState}` +
+      (incidentCount > 0
+        ? ` (${incidentCount} incident${incidentCount === 1 ? '' : 's'})`
+        : '');
+    return `<span class="day-dot" data-state="${esc(state)}" title="${esc(title)}" aria-label="${esc(title)}"></span>`;
+  }
+
+  function render(env: StatusEnvelope | null, meta: PollMeta): void {
+    const loading = $('history-loading');
+    const error   = $('history-error');
+    const content = $('history-content');
+    if (!loading || !error || !content) return;
+
+    if (env === null && meta.isOffline) {
+      loading.hidden = true;
+      content.hidden = true;
+      error.hidden = false;
+      return;
+    }
+    if (env === null) return;
+
+    loading.hidden = true;
+    error.hidden = true;
+    content.hidden = false;
+
+    const days = lastNDates(30);
+    const buckets = bucketByDay(env.recent);
+
+    // Group days by month label (oldest day → newest day creates
+    // the month buckets in newest-first when we iterate dates
+    // newest-first).
+    const monthGroups = new Map<string, Date[]>();
+    for (const d of days) {
+      const m = monthLabel(d);
+      const arr = monthGroups.get(m) ?? [];
+      arr.push(d);
+      monthGroups.set(m, arr);
+    }
+
+    const html: string[] = [];
+    for (const [month, dates] of monthGroups) {
+      // Re-sort each month's dates oldest → newest so the grid
+      // reads left-to-right like a calendar timeline.
+      const sortedDates = [...dates].sort(
+        (a, b) => a.getTime() - b.getTime(),
+      );
+      const dots = sortedDates.map((d) => {
+        const k = dayKey(d);
+        const incidents = buckets.get(k) ?? [];
+        const state: BannerState | 'unknown' =
+          incidents.length === 0 ? 'operational' : dayState(incidents);
+        return dayDotHtml(d, state, incidents.length);
+      }).join('');
+      const dayIncidents = sortedDates.flatMap(
+        (d) => buckets.get(dayKey(d)) ?? [],
+      );
+      const summary = dayIncidents.length === 0
+        ? 'No incidents'
+        : `${dayIncidents.length} incident${dayIncidents.length === 1 ? '' : 's'}`;
+      html.push(`
+        <section class="history-month">
+          <h2 class="history-month__title">
+            ${esc(month)}
+            <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-faint);margin-left:10px;font-weight:500;">
+              ${esc(summary)}
+            </span>
+          </h2>
+          <div class="history-month__grid">${dots}</div>
+        </section>
+      `);
+    }
+
+    content.innerHTML = html.join('');
+  }
+
+  const stop = startStatusPolling({
+    onUpdate(env, meta) { render(env, meta); },
+    onError(_e, meta)   { render(null, meta); },
+  });
+  window.addEventListener('beforeunload', stop);
+</script>
