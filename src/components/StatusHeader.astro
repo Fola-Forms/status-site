@@ -6,8 +6,10 @@
  *
  * Markup is structured so the client script (in index.astro) can
  * cheaply update individual nodes without re-rendering the whole
- * banner: the title, sub-line, last-checked stamp, and offline
- * chip each have stable IDs.
+ * banner: the title, sub-line, and last-checked stamp each have
+ * stable IDs. There is no "offline" chip — the "Last checked X ago"
+ * stamp is enough signal; if the API genuinely vanishes the stamp
+ * drifts forward and the user can see the data is stale.
  */
 ---
 <section class="status-banner"
@@ -44,13 +46,6 @@
         <span class="status-banner__chip" id="status-banner-stamp">
           <span class="status-banner__chip-dot" aria-hidden="true"></span>
           <span id="status-banner-stamp-text">Last checked: just now</span>
-        </span>
-        <span class="status-banner__chip"
-              id="status-banner-offline"
-              data-tone="warn"
-              hidden>
-          <span class="status-banner__chip-dot" aria-hidden="true"></span>
-          <span>Offline · retrying</span>
         </span>
       </p>
     </div>

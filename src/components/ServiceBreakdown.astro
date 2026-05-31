@@ -47,10 +47,13 @@
     // The API returns newest-first; flip so today is on the right.
     const ordered = [...days].reverse();
     return ordered.map((d) => {
-      const state = d.status ?? 'UNKNOWN';
+      // Pre-deployment days have no samples (status === null). We
+      // render them as OK rather than gray "unknown" so a freshly
+      // shipped status page doesn't look like a 90-day outage.
+      const state = d.status ?? 'OK';
       const title = d.uptimePct != null
         ? `${d.day} · ${d.uptimePct}% uptime`
-        : `${d.day} · no data`;
+        : `${d.day} · no incidents recorded`;
       return `<span class="svc-bar"
                     data-state="${esc(state)}"
                     title="${esc(title)}"
@@ -59,10 +62,10 @@
   }
 
   function uptimeStripHtml(days: ServiceDayPoint[]): string {
+    // Treat unrecorded days as 100% (same assumption as the bars).
     let total = 0, weight = 0;
     for (const d of days) {
-      if (d.uptimePct == null) continue;
-      total += d.uptimePct;
+      total += d.uptimePct ?? 100;
       weight += 1;
     }
     const avg = weight === 0 ? null : total / weight;
@@ -82,7 +85,6 @@
       <div class="svc-row" data-service="${esc(svc.id)}">
         <div class="svc-row__head">
           <h3 class="svc-row__title">${esc(svc.label)}</h3>
-          <p class="svc-row__sub">${esc(svc.description)}</p>
         </div>
         <span class="svc-row__state"
               data-state="${esc(svc.currentStatus)}"

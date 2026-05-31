@@ -1,0 +1,161 @@
+/* status.folaform.com — proper-calendar history view.
+ *
+ * One card per month: header (month + year + summary), Sun..Sat
+ * column headers, then a 7-column × 6-row grid of day cells.
+ * Cells before the 1st and after the month's last day are empty
+ * placeholders so the columns stay aligned to weekday positions.
+ *
+ * Each populated cell renders the day number on the green / amber
+ * / red background that matches the worst incident state we saw
+ * that day. Days outside the backend's incident window get a
+ * "no-data" cell (default green — same assumption as the service
+ * uptime bars).
+ */
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 720px) {
+  .cal-grid { grid-template-columns: 1fr; }
+}
+
+.cal-month {
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 18px 16px 16px;
+}
+.cal-month__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hairline-light);
+}
+.cal-month__title {
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  letter-spacing: -0.005em;
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+.cal-month__sub {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.cal-weeklabels {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.cal-weeklabels__cell {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.cal-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-day {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  position: relative;
+  cursor: default;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+.cal-day:hover {
+  transform: scale(1.04);
+  box-shadow: 0 0 0 2px var(--bg);
+  z-index: 1;
+}
+.cal-day--empty {
+  background: transparent;
+  cursor: default;
+  color: transparent;
+}
+.cal-day--empty:hover {
+  transform: none;
+  box-shadow: none;
+}
+.cal-day[data-state='operational'] { background: var(--green); }
+.cal-day[data-state='maintenance'] { background: var(--accent); }
+.cal-day[data-state='degraded']    { background: var(--amber); }
+.cal-day[data-state='outage']      { background: var(--red); }
+.cal-day[data-state='unknown']     {
+  background: var(--hairline-shade);
+  color: var(--ink-mute);
+}
+
+/* Future days (later this month, not yet happened) — render as a
+ * thin outlined cell so the calendar still reads as "the rest of
+ * the month exists" without claiming uptime for the future. */
+.cal-day--future {
+  background: transparent;
+  border: 1px dashed var(--hairline);
+  color: var(--ink-faint);
+}
+.cal-day--future:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Today gets a subtle ring so the eye lands on it instantly. */
+.cal-day--today {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.cal-day--today:hover {
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  margin: 6px 0 28px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.cal-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-legend__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.cal-legend__swatch[data-state='operational'] { background: var(--green); }
+.cal-legend__swatch[data-state='degraded']    { background: var(--amber); }
+.cal-legend__swatch[data-state='outage']      { background: var(--red); }
+.cal-legend__swatch[data-state='maintenance'] { background: var(--accent); }
+.cal-legend__swatch[data-state='future'] {
+  border: 1px dashed var(--hairline);
+}

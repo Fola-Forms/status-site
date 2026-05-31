@@ -1,44 +1,69 @@
 ---
 /**
- * Extended history view. The current backend exposes 30 days of
- * recent incidents on the public envelope; we group those by
- * MONTH and render a per-day uptime grid.
+ * Calendar history view. Renders the last 6 months as proper
+ * 7-column calendar grids — one card per month, with the days
+ * laid out under Sun..Sat headers so the eye can scan the
+ * timeline like an actual wall calendar.
  *
- * TODO: when the backend gains a 90-day public endpoint
- * (e.g. /api/public/v1/incidents/history?days=90), swap
- * `recent` for the larger window. The shape of the response is
- * expected to be identical (an array of IncidentView) so the
- * grouping + grid renderer below can be reused as-is.
+ * Day state is derived from the public incidents envelope: any day
+ * inside a recorded incident takes that incident's worst state;
+ * otherwise the day is "operational" (green). Future days within
+ * the current month render as outlined cells so the month grid
+ * stays visually complete without claiming uptime for tomorrow.
  */
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 <BaseLayout
   title="History · Fola Form Status"
-  description="Recent incident history for Fola Form, grouped by month with per-day uptime."
+  description="Calendar view of Fola Form uptime by day, grouped by month."
   canonical="https://status.folaform.com/history"
 >
   <div class="shell shell--narrow" style="padding-top:36px;">
     <p class="section-eyebrow">History</p>
     <h1 style="font-size:clamp(1.8rem,4vw,2.4rem);margin:0 0 8px;">
-      Past 30 days of incidents
+      Uptime history
     </h1>
-    <p style="margin:0 0 28px;color:var(--ink-soft);font-family:var(--font-serif);font-size:1.06rem;line-height:1.6;">
-      Each cell below is one day. Green is operational; amber is
-      degraded; red is an outage; blue is a planned maintenance
-      window. Hover for the day's headline.
+    <p style="margin:0 0 18px;color:var(--ink-soft);font-family:var(--font-serif);font-size:1.06rem;line-height:1.6;">
+      Last six months at a glance. Each cell is one day; green is
+      operational, amber is degraded service, red is an outage,
+      blue is a planned maintenance window. Hover a cell for the
+      day's headline.
     </p>
 
+    <div class="cal-legend" aria-label="State legend">
+      <span class="cal-legend__item">
+        <span class="cal-legend__swatch" data-state="operational"></span>
+        Operational
+      </span>
+      <span class="cal-legend__item">
+        <span class="cal-legend__swatch" data-state="degraded"></span>
+        Degraded
+      </span>
+      <span class="cal-legend__item">
+        <span class="cal-legend__swatch" data-state="outage"></span>
+        Outage
+      </span>
+      <span class="cal-legend__item">
+        <span class="cal-legend__swatch" data-state="maintenance"></span>
+        Maintenance
+      </span>
+      <span class="cal-legend__item">
+        <span class="cal-legend__swatch" data-state="future"></span>
+        Upcoming
+      </span>
+    </div>
+
     <div id="history-loading">
-      <div class="skeleton" style="height:120px"></div>
-      <div class="skeleton" style="height:120px"></div>
+      <div class="skeleton" style="height:280px"></div>
+      <div class="skeleton" style="height:280px"></div>
     </div>
 
     <div id="history-error"
          class="placeholder"
          hidden>
       <strong>Couldn't reach the status API</strong>
-      We'll keep trying every 30 seconds. The chart below will
-      populate the moment the connection comes back.
+      We'll keep trying. The calendar below populates the moment
+      the connection comes back.
     </div>
 
     <div id="history-content" hidden></div>
@@ -52,15 +77,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     type StatusEnvelope,
     type PollMeta,
   } from '../lib/api';
-  import {
-    dayState,
-    type BannerState,
-  } from '../lib/severity';
-  import {
-    dayKey,
-    longDay,
-    monthLabel,
-  } from '../lib/time';
+  import { dayState, type BannerState } from '../lib/severity';
+  import { dayKey, longDay } from '../lib/time';
+
+  /** How many months to render, anchored on today. */
+  const MONTH_COUNT = 6;
+
+  /** Sun..Sat header labels. Matches week-starts-on-Sunday — flip
+   *  to ['Mon', …] if/when we go international. */
+  const WEEK_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  type DayState = BannerState | 'unknown' | 'future';
 
   function $(id: string): HTMLElement | null {
     return document.getElementById(id);
@@ -72,9 +99,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }[c] as string));
   }
 
-  function bucketByDay(
-    incidents: IncidentView[],
-  ): Map<string, IncidentView[]> {
+  function bucketByDay(incidents: IncidentView[]): Map<string, IncidentView[]> {
     const out = new Map<string, IncidentView[]>();
     for (const inc of incidents) {
       const k = dayKey(inc.startedAt);
@@ -85,35 +110,120 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     return out;
   }
 
-  function lastNDates(n: number): Date[] {
+  function monthStart(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  }
+
+  function monthsLookingBack(n: number): Date[] {
     const out: Date[] = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     for (let i = 0; i < n; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      out.push(d);
+      out.push(monthStart(new Date(today.getFullYear(), today.getMonth() - i, 1)));
     }
     return out;
   }
 
-  function dayDotHtml(
+  function daysInMonth(d: Date): number {
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  }
+
+  function monthTitle(d: Date): string {
+    return d.toLocaleDateString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+
+  function stateLabel(state: DayState): string {
+    switch (state) {
+      case 'operational': return 'all systems operational';
+      case 'maintenance': return 'planned maintenance';
+      case 'degraded':    return 'degraded performance';
+      case 'outage':      return 'outage reported';
+      case 'future':      return 'upcoming';
+      default:            return 'no data';
+    }
+  }
+
+  function dayCellHtml(
     date: Date,
-    state: BannerState | 'unknown',
-    incidentCount: number,
+    state: DayState,
+    incidents: IncidentView[],
+    isToday: boolean,
   ): string {
-    const labelDate = longDay(date);
-    const labelState =
-      state === 'operational' ? 'all systems operational' :
-      state === 'maintenance' ? 'planned maintenance'     :
-      state === 'degraded'    ? 'degraded performance'    :
-      state === 'outage'      ? 'outage reported'         :
-                                 'no data';
-    const title = `${labelDate} — ${labelState}` +
-      (incidentCount > 0
-        ? ` (${incidentCount} incident${incidentCount === 1 ? '' : 's'})`
+    const label = `${longDay(date)} — ${stateLabel(state)}` +
+      (incidents.length > 0
+        ? ` (${incidents.length} incident${incidents.length === 1 ? '' : 's'})`
         : '');
-    return `<span class="day-dot" data-state="${esc(state)}" title="${esc(title)}" aria-label="${esc(title)}"></span>`;
+    const classes = ['cal-day'];
+    if (state === 'future') classes.push('cal-day--future');
+    if (isToday) classes.push('cal-day--today');
+    return `<span
+      class="${classes.join(' ')}"
+      data-state="${esc(state === 'future' ? 'operational' : state)}"
+      title="${esc(label)}"
+      aria-label="${esc(label)}"
+    >${date.getDate()}</span>`;
+  }
+
+  function monthCardHtml(
+    month: Date,
+    buckets: Map<string, IncidentView[]>,
+    today: Date,
+  ): string {
+    const firstWeekday = month.getDay();
+    const total = daysInMonth(month);
+    const cells: string[] = [];
+
+    // Empty leading cells so day-1 lands under the right weekday.
+    for (let i = 0; i < firstWeekday; i++) {
+      cells.push('<span class="cal-day cal-day--empty" aria-hidden="true"></span>');
+    }
+
+    let monthIncidents = 0;
+    for (let day = 1; day <= total; day++) {
+      const d = new Date(month.getFullYear(), month.getMonth(), day);
+      const k = dayKey(d);
+      const incidents = buckets.get(k) ?? [];
+      monthIncidents += incidents.length;
+      let state: DayState;
+      if (d.getTime() > today.getTime()) {
+        state = 'future';
+      } else if (incidents.length === 0) {
+        state = 'operational';
+      } else {
+        state = dayState(incidents);
+      }
+      const isToday = d.getTime() === today.getTime();
+      cells.push(dayCellHtml(d, state, incidents, isToday));
+    }
+
+    // Trailing empty cells to fill the last row to 7.
+    const trailing = (7 - ((firstWeekday + total) % 7)) % 7;
+    for (let i = 0; i < trailing; i++) {
+      cells.push('<span class="cal-day cal-day--empty" aria-hidden="true"></span>');
+    }
+
+    const summary = monthIncidents === 0
+      ? 'No incidents'
+      : `${monthIncidents} incident${monthIncidents === 1 ? '' : 's'}`;
+
+    return `
+      <section class="cal-month" aria-label="${esc(monthTitle(month))}">
+        <header class="cal-month__head">
+          <h2 class="cal-month__title">${esc(monthTitle(month))}</h2>
+          <span class="cal-month__sub">${esc(summary)}</span>
+        </header>
+        <div class="cal-weeklabels" aria-hidden="true">
+          ${WEEK_LABELS.map((w) =>
+            `<span class="cal-weeklabels__cell">${w}</span>`).join('')}
+        </div>
+        <div class="cal-days">
+          ${cells.join('')}
+        </div>
+      </section>
+    `;
   }
 
   function render(env: StatusEnvelope | null, meta: PollMeta): void {
@@ -134,54 +244,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     error.hidden = true;
     content.hidden = false;
 
-    const days = lastNDates(30);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const months = monthsLookingBack(MONTH_COUNT);
     const buckets = bucketByDay(env.recent);
 
-    // Group days by month label (oldest day → newest day creates
-    // the month buckets in newest-first when we iterate dates
-    // newest-first).
-    const monthGroups = new Map<string, Date[]>();
-    for (const d of days) {
-      const m = monthLabel(d);
-      const arr = monthGroups.get(m) ?? [];
-      arr.push(d);
-      monthGroups.set(m, arr);
-    }
-
-    const html: string[] = [];
-    for (const [month, dates] of monthGroups) {
-      // Re-sort each month's dates oldest → newest so the grid
-      // reads left-to-right like a calendar timeline.
-      const sortedDates = [...dates].sort(
-        (a, b) => a.getTime() - b.getTime(),
-      );
-      const dots = sortedDates.map((d) => {
-        const k = dayKey(d);
-        const incidents = buckets.get(k) ?? [];
-        const state: BannerState | 'unknown' =
-          incidents.length === 0 ? 'operational' : dayState(incidents);
-        return dayDotHtml(d, state, incidents.length);
-      }).join('');
-      const dayIncidents = sortedDates.flatMap(
-        (d) => buckets.get(dayKey(d)) ?? [],
-      );
-      const summary = dayIncidents.length === 0
-        ? 'No incidents'
-        : `${dayIncidents.length} incident${dayIncidents.length === 1 ? '' : 's'}`;
-      html.push(`
-        <section class="history-month">
-          <h2 class="history-month__title">
-            ${esc(month)}
-            <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-faint);margin-left:10px;font-weight:500;">
-              ${esc(summary)}
-            </span>
-          </h2>
-          <div class="history-month__grid">${dots}</div>
-        </section>
-      `);
-    }
-
-    content.innerHTML = html.join('');
+    content.innerHTML = `
+      <div class="cal-grid">
+        ${months.map((m) => monthCardHtml(m, buckets, today)).join('')}
+      </div>
+    `;
   }
 
   const stop = startStatusPolling({

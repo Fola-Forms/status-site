@@ -114,8 +114,7 @@ import SubscribeForm from '../components/SubscribeForm.astro';
     const title  = $('status-banner-title');
     const sub    = $('status-banner-sub');
     const stamp  = $('status-banner-stamp-text');
-    const off    = $('status-banner-offline');
-    if (!banner || !icon || !title || !sub || !stamp || !off) return;
+    if (!banner || !icon || !title || !sub || !stamp) return;
 
     if (env === null) {
       // No payload (initial render OR first fetch failed). Hold
@@ -126,7 +125,7 @@ import SubscribeForm from '../components/SubscribeForm.astro';
         ? "We can't reach the status API"
         : 'Checking status…';
       sub.textContent = meta.isOffline
-        ? 'Showing the most recent state we have. Retrying every 30 seconds.'
+        ? 'Showing the most recent state we have.'
         : 'Loading the latest from api.folaform.com.';
     } else if (!env.enabled) {
       // Feature flag off — treat as all clear.
@@ -147,14 +146,6 @@ import SubscribeForm from '../components/SubscribeForm.astro';
     stamp.textContent = meta.lastSuccessAt
       ? `Last checked ${relativeTime(meta.lastSuccessAt)}`
       : 'Last checked: never';
-    // Only show the offline chip if it's been genuinely stale —
-    // a single failed retry between successful polls would otherwise
-    // flash "OFFLINE · RETRYING" right next to a fresh "15s ago"
-    // stamp, which is confusing. 90s = 3 missed 30s polls.
-    const staleMs = meta.lastSuccessAt
-      ? Date.now() - meta.lastSuccessAt.getTime()
-      : Infinity;
-    off.hidden = !(meta.isOffline && staleMs > 90_000);
   }
 
   function incidentCardHtml(inc: IncidentView): string {
