@@ -85,7 +85,10 @@ const DEFAULT_TODAY_ENDPOINT =
   'https://api.folaform.com/api/public/v1/services/today';
 const DEFAULT_INTERVAL_MS = 60_000;
 
-const LS_KEY = 'fola.status.services.v1';
+// Bump the suffix whenever the per-service envelope shape or its
+// labels change — old cached payloads get evicted on next mount so
+// stale partner names (e.g. "OpenAI") don't linger in the UI.
+const LS_KEY = 'fola.status.services.v3';
 /** Local-storage cache freshness window. Past this, the next boot
  *  fetches the full envelope again so newly-added services + day
  *  rollups land. Six hours keeps the wire traffic low even for

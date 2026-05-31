@@ -52,8 +52,19 @@ export function bannerStateFor(
   );
   if (hasOutage) return 'outage';
 
-  // Otherwise: MINOR open, or MAJOR/CRITICAL already in
-  // MONITORING — call it degraded.
+  // Escalate the banner ONLY when a MAJOR / CRITICAL incident is
+  // open — MINOR-only noise (e.g. a single carrier polling delay)
+  // shouldn't paint the whole page amber and alarm every visitor.
+  // MINOR incidents still appear in the Active section below the
+  // banner so users who scroll see what's going on.
+  const hasMajorOrCritical = realIncidents.some(
+    (i) => i.severity === 'MAJOR' || i.severity === 'CRITICAL',
+  );
+  if (!hasMajorOrCritical) return 'operational';
+
+  // MAJOR/CRITICAL in MONITORING — partially recovered, still
+  // worth flagging as degraded so visitors know not to file a bug
+  // report yet.
   return 'degraded';
 }
 
