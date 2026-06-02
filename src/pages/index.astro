@@ -197,6 +197,11 @@ import SubscribeForm from '../components/SubscribeForm.astro';
     list.innerHTML = open.map(incidentCardHtml).join('');
   }
 
+  // Don't blank the history list if a transient poll comes back
+  // with no recent incidents — keep the last good paint. The next
+  // tick heals it if there's still nothing to report.
+  let hasRenderedHistory = false;
+
   function renderHistory(env: StatusEnvelope | null): void {
     const list  = $('history-list');
     const empty = $('history-empty');
@@ -204,11 +209,14 @@ import SubscribeForm from '../components/SubscribeForm.astro';
 
     const recent = env?.recent ?? [];
     if (recent.length === 0) {
-      list.innerHTML = '';
-      empty.hidden = false;
+      if (!hasRenderedHistory) {
+        list.innerHTML = '';
+        empty.hidden = false;
+      }
       return;
     }
     empty.hidden = true;
+    hasRenderedHistory = true;
 
     // Bucket by day of `startedAt`. Sort buckets newest first.
     const byDay = new Map<string, IncidentView[]>();

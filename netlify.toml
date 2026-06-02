@@ -24,7 +24,34 @@
 # The shell HTML should never be aggressively cached — we want
 # users to pick up new deploys quickly. The static assets are
 # already content-hashed by Astro so they cache themselves.
+#
+# IMPORTANT: Astro emits clean URLs (`/history`, not `/history.html`).
+# Netlify matches header rules against the REQUESTED path, so a
+# `for = "/*.html"` rule alone never fires on the served URL — the
+# old behaviour was that every clean URL kept getting a stale build
+# until a hard refresh. Mirror each emitted page below so the
+# directive actually attaches.
 [[headers]]
   for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/history"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/confirm"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/unsubscribe"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+[[headers]]
+  for = "/incidents/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"

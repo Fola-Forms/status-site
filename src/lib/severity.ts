@@ -116,7 +116,18 @@ export function statusLabel(status: IncidentStatus): string {
 /**
  * Reduce a set of incidents that overlap one day to a single
  * banner state for that day. Used by the history grid.
+ *
+ * <p>MINOR incidents only color the day amber if they were
+ * actually disruptive — a 30-second polling blip used to paint
+ * the whole day yellow, which is misleading both visually and
+ * trust-wise. The threshold treats MINOR < 5 min (or any MINOR
+ * still without a resolved-at after we hit the cutoff) as a
+ * transient and leaves the day green. MAJOR / CRITICAL /
+ * MAINTENANCE are NOT thresholded — those are real events worth
+ * surfacing for any duration.
  */
+const MINOR_DURATION_THRESHOLD_MS = 5 * 60 * 1000;
+
 export function dayState(
   incidentsOnDay: IncidentView[],
 ): BannerState {
@@ -128,12 +139,24 @@ export function dayState(
   return worst;
 }
 
+function incidentDurationMs(inc: IncidentView): number {
+  const start = Date.parse(inc.startedAt);
+  if (Number.isNaN(start)) return 0;
+  const end = inc.resolvedAt ? Date.parse(inc.resolvedAt) : Date.now();
+  if (Number.isNaN(end)) return 0;
+  return Math.max(0, end - start);
+}
+
 function singleIncidentBannerState(
   incident: IncidentView,
 ): BannerState {
   if (incident.severity === 'MAINTENANCE') return 'maintenance';
   if (incident.severity === 'MAJOR' || incident.severity === 'CRITICAL') {
     return 'outage';
+  }
+  // MINOR — duration gate. Short blips don't color the day.
+  if (incidentDurationMs(incident) < MINOR_DURATION_THRESHOLD_MS) {
+    return 'operational';
   }
   return 'degraded';
 }

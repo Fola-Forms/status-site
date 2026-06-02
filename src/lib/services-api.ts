@@ -87,13 +87,17 @@ const DEFAULT_INTERVAL_MS = 60_000;
 
 // Bump the suffix whenever the per-service envelope shape or its
 // labels change — old cached payloads get evicted on next mount so
-// stale partner names (e.g. "OpenAI") don't linger in the UI.
-const LS_KEY = 'fola.status.services.v3';
+// stale partner names (e.g. "OpenAI") don't linger in the UI. Also
+// bumped on cache-policy changes so existing tabs evict their old
+// payload on next mount.
+const LS_KEY = 'fola.status.services.v4';
 /** Local-storage cache freshness window. Past this, the next boot
- *  fetches the full envelope again so newly-added services + day
- *  rollups land. Six hours keeps the wire traffic low even for
- *  users with the page pinned in a tab. */
-const FULL_TTL_MS = 6 * 60 * 60 * 1000;
+ *  refetches the full envelope so newly-added services + day
+ *  rollups land. Was 6 hours, but users on long-pinned tabs saw
+ *  stale yellow days persist past resolution — 20 min keeps the
+ *  bar strip reliably current while still serving instantly from
+ *  cache on quick repeat visits. */
+const FULL_TTL_MS = 20 * 60 * 1000;
 
 // ───── In-memory cache shared between callers ─────
 
@@ -146,9 +150,46 @@ function isFresh(cachedAt: number): boolean {
 /**
  * Apply a today-poll snapshot onto the cached envelope. Updates
  * the per-service `currentStatus` / `currentMessage` / `currentLatencyMs`
- * fields + replaces the first (today's) day-point. Returns a fresh
- * envelope reference so SSR / signal-based consumers see the change.
+ * fields + reconciles the first (today's) day-point. Returns a
+ * fresh envelope reference so SSR / signal-based consumers see
+ * the change.
+ *
+ * <p>The `currentStatus` reflects the LAST check (could be OK
+ * right now even if there was a DEGRADED window an hour ago);
+ * the day-point's `status` and `uptimePct` must reflect the
+ * day's WORST observed state, not the moment. Without this guard
+ * a yellow bar would flip green the moment a transient blip
+ * resolved — the visual record of the incident would vanish
+ * before midnight rolled the day over.
  */
+const DAY_STATUS_RANK: Record<NonNullable<ServiceStatus>, number> = {
+  OK: 0,
+  DEGRADED: 1,
+  DOWN: 2,
+};
+
+function worstDayPoint(
+  prev: ServiceDayPoint | undefined,
+  next: ServiceDayPoint,
+): ServiceDayPoint {
+  if (!prev) return next;
+  const prevStatus = prev.status ?? 'OK';
+  const nextStatus = next.status ?? 'OK';
+  const worstStatus =
+    DAY_STATUS_RANK[nextStatus] > DAY_STATUS_RANK[prevStatus]
+      ? nextStatus
+      : prevStatus;
+  // Lower uptime wins (a degradation never erases prior loss). Treat
+  // a null sample as "no data yet" — fall back to the other side.
+  const prevPct = prev.uptimePct;
+  const nextPct = next.uptimePct;
+  let uptimePct: number | null;
+  if (prevPct == null) uptimePct = nextPct;
+  else if (nextPct == null) uptimePct = prevPct;
+  else uptimePct = Math.min(prevPct, nextPct);
+  return { day: next.day, status: worstStatus, uptimePct };
+}
+
 export function mergeToday(
   envelope: ServicesEnvelope,
   today: ServicesTodayEnvelope,
@@ -166,7 +207,9 @@ export function mergeToday(
         if (!t) return s;
         const days = s.days.slice();
         if (days.length > 0 && days[0]!.day === t.today.day) {
-          days[0] = t.today;
+          // Same calendar day — merge worst-of so an OK now never
+          // erases a DEGRADED earlier today.
+          days[0] = worstDayPoint(days[0], t.today);
         } else {
           // Today rolled over since last full fetch — prepend and
           // drop the tail so the window length stays stable.

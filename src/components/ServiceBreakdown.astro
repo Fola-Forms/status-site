@@ -100,16 +100,28 @@
     `;
   }
 
+  // Remember whether we have ever successfully painted a chart. A
+  // transient empty envelope (backend hiccup, cache eviction race)
+  // should NOT blank a chart that's already on screen — the previous
+  // render stays put while the next poll heals it.
+  let hasRenderedChart = false;
+
   function render(env: ServicesEnvelope | null): void {
     const list = $('services-list');
     const empty = $('services-empty');
     if (!list || !empty) return;
     if (!env || env.groups.length === 0) {
-      list.innerHTML = '';
-      empty.hidden = false;
+      // Only show the "no services configured" placeholder when we
+      // have NEVER rendered a chart. Otherwise hold the last good
+      // paint so a flaky poll doesn't make the strip disappear.
+      if (!hasRenderedChart) {
+        list.innerHTML = '';
+        empty.hidden = false;
+      }
       return;
     }
     empty.hidden = true;
+    hasRenderedChart = true;
     list.innerHTML = env.groups.map((g) => {
       const rows = g.services.map(rowHtml).join('');
       return `
