@@ -1,4 +1,43 @@
+# 2026 robots.txt — AI-Overview eligible.
+# Blocking AI crawlers removes the site from AI answer surfaces.
+
 User-agent: *
+Allow: /
+
+# Google AI surfaces (AI Overviews + AI Mode)
+User-agent: Googlebot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: GoogleOther
+Allow: /
+
+# Bing (Copilot, DuckDuckGo grounding)
+User-agent: Bingbot
+Allow: /
+
+# Major AI assistants
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Meta-ExternalAgent
 Allow: /
 
 Sitemap: https://status.folaform.com/sitemap-index.xml
