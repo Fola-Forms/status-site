@@ -1,6 +1,6 @@
 # status.folaform.com
 
-Public incident status page for the Fola platform.
+Public incident status page for Fola, an AI-native immigration & compliance practice.
 
 ## How it works
 
