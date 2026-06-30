@@ -1,6 +1,6 @@
 # status.folaform.com
 
-Public incident status page for the Fola Form platform.
+Public incident status page for the Fola platform.
 
 ## How it works
 

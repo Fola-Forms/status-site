@@ -41,7 +41,7 @@ export async function getStaticPaths() {
 }
 ---
 <BaseLayout
-  title="Incident · Fola Form Status"
+  title="Incident · Fola Status"
   description="Live incident detail — severity, status, timeline of updates."
   canonical="https://status.folaform.com/incidents/"
 >
@@ -268,7 +268,7 @@ export async function getStaticPaths() {
     }
 
     // Reflect incident title in the document <title>.
-    document.title = `${inc.title} · Fola Form Status`;
+    document.title = `${inc.title} · Fola Status`;
   }
 
   const stop = startStatusPolling({

@@ -76,7 +76,7 @@ export function bannerCopy(state: BannerState): {
     case 'operational':
       return {
         title: 'All systems operational',
-        sub: 'Fola Form is running normally across all surfaces.',
+        sub: 'Fola is running normally across all surfaces.',
       };
     case 'maintenance':
       return {
