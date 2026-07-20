@@ -17,7 +17,7 @@
  * shrink touch targets.
  */
 (function () {
-  var MIN_ZOOM = 0.8; // at/below DESKTOP_MIN
+  var MIN_ZOOM = 0.85; // at/below DESKTOP_MIN
   var MAX_ZOOM = 1.0; // at/above FULL_WIDTH
   var DESKTOP_MIN = 1280; // narrower than this = tablet/phone → no scaling
   var FULL_WIDTH = 1920; // 1080p-class and wider render at full size
@@ -28,13 +28,19 @@
     var root = document.documentElement;
     if (w < DESKTOP_MIN) {
       root.style.zoom = '';
+      root.style.removeProperty('--app-zoom');
       return;
     }
     var t = (w - DESKTOP_MIN) / (FULL_WIDTH - DESKTOP_MIN);
     if (t < 0) t = 0;
     if (t > 1) t = 1;
-    var z = MIN_ZOOM + t * (MAX_ZOOM - MIN_ZOOM);
-    root.style.zoom = String(Math.round(z * 100) / 100);
+    var z = Math.round((MIN_ZOOM + t * (MAX_ZOOM - MIN_ZOOM)) * 100) / 100;
+    root.style.zoom = String(z);
+    // Viewport units are NOT rescaled by zoom, so a 100vh shell would
+    // paint at only z×viewport and leave a blank band under the page
+    // footer. Stylesheets divide full-viewport units by this variable
+    // (calc(100vh / var(--app-zoom, 1))) to compensate.
+    root.style.setProperty('--app-zoom', String(z));
   }
 
   apply();
